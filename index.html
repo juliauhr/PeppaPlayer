@@ -78,14 +78,37 @@
 
   <div id="boot">
     <div class="spinner"></div>
-    <div id="boot-text">Connecting to stream…</div>
+    <div id="boot-text">Loading episode…</div>
   </div>
 </div>
 
 <script>
   // ---- Config ----
-  var VIDEO_ID = "_PnbRwLr7WA";
+  var VIDEO_IDS = [
+    "_PnbRwLr7WA",
+    "Wi1fKCIzu6s",
+    "0Rs0AgN6td0",
+    "FDymSSGPfrQ",
+    "N-5EeX8I_Bk",
+    "vTeLphnQgE8",
+    "klcHoJaFmt0",
+    "QTwx6qJ5jUA",
+    "R76nr5cjklw",
+    "YGjxvtFTJQA",
+    "lC_I8u9YwY8"
+  ];
   var PLAYBACK_RATE = 0.85;
+  var lastVideoId = null;
+
+  function pickRandomVideoId() {
+    if (VIDEO_IDS.length === 1) return VIDEO_IDS[0];
+    var candidate;
+    do {
+      candidate = VIDEO_IDS[Math.floor(Math.random() * VIDEO_IDS.length)];
+    } while (candidate === lastVideoId);
+    lastVideoId = candidate;
+    return candidate;
+  }
 
   // ---- Load YouTube IFrame API ----
   var tag = document.createElement('script');
@@ -118,7 +141,7 @@
     player = new YT.Player('yt-player-host', {
       width: '100%',
       height: '100%',
-      videoId: VIDEO_ID,
+      videoId: pickRandomVideoId(),
       playerVars: {
         autoplay: 1,
         controls: 0,
@@ -156,9 +179,10 @@
       // Don't show the full boot screen for ordinary buffering blips —
       // only the persistent connect/error state needs that.
     } else if (e.data === YT.PlayerState.ENDED) {
-      // Live streams shouldn't "end" under normal conditions; treat
-      // it as a hiccup and resume.
-      player.playVideo();
+      var nextId = pickRandomVideoId();
+      boot.classList.remove('hidden');
+      bootText.textContent = 'Loading next episode…';
+      player.loadVideoById(nextId);
     }
   }
 
