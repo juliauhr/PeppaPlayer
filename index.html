@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Peppa 直播</title>
+<style>
+  :root {
+    --bg: #000000;
+    --accent: #ffd23f;
+    --dim: rgba(255,255,255,0.55);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    overflow: hidden;
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  }
+  #stage {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+  }
+  #player-wrap {
+    position: absolute; inset: 0;
+  }
+  #player-wrap iframe {
+    width: 100%; height: 100%; border: 0; display: block;
+  }
+
+  /* Tap anywhere toggles this overlay */
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 20px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 78%, rgba(0,0,0,0.55) 100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+  }
+  #overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    align-self: flex-start;
+  }
+  .dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #ff5050;
+  }
+  .dot.live { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  #status-text {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  #center-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 36px;
+  }
+  .ctrl-btn {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: 1.5px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+  }
+  .ctrl-btn svg { width: 26px; height: 26px; fill: #fff; }
+  #play-pause { width: 78px; height: 78px; background: rgba(255,210,63,0.18); border-color: var(--accent); }
+  #play-pause svg { width: 30px; height: 30px; fill: var(--accent); }
+
+  #bottom-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  #title-text {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+  }
+  #hint-text {
+    color: var(--dim);
+    font-size: 11px;
+    text-align: center;
+  }
+
+  #boot {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px;
+    background: #000;
+    z-index: 10;
+    transition: opacity 400ms ease;
+  }
+  #boot.hidden { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 34px; height: 34px;
+    border: 3px solid rgba(255,255,255,0.18);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #boot-text { color: var(--dim); font-size: 13px; letter-spacing: 0.02em; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="player-wrap">
+    <iframe
+      id="yt-iframe"
+      src="https://www.youtube-nocookie.com/embed/_PnbRwLr7WA?autoplay=1&mute=0&controls=0&disablekb=1&fs=0&iv_load_policy=3&modestbranding=1&playsinline=1&rel=0"
+      allow="autoplay; encrypted-media; picture-in-picture"
+      referrerpolicy="strict-origin-when-cross-origin"
+      allowfullscreen>
+    </iframe>
+  </div>
+
+  <div id="overlay">
+    <div id="status-row">
+      <div class="dot live" id="live-dot"></div>
+      <div id="status-text">LIVE</div>
+    </div>
+
+    <div id="center-controls">
+      <button class="ctrl-btn" id="mute-btn" aria-label="Mute toggle">
+        <svg id="mute-icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/></svg>
+      </button>
+      <button class="ctrl-btn" id="play-pause" aria-label="Play/Pause">
+        <svg id="play-pause-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="ctrl-btn" id="reload-btn" aria-label="Reload stream">
+        <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.95 7.95 0 0012 4a8 8 0 108 8h-2a6 6 0 11-1.76-4.24L13 11h7V4l-2.35 2.35z"/></svg>
+      </button>
+    </div>
+
+    <div id="bottom-row">
+      <div id="title-text">小猪佩奇 · Peppa Pig 中文</div>
+      <div id="hint-text">Tap to hide · Double-tap centre to pause</div>
+    </div>
+  </div>
+
+  <div id="boot">
+    <div class="spinner"></div>
+    <div id="boot-text">Connecting to stream…</div>
+  </div>
+</div>
+
+<script>
+  // ---- Config ----
+  var VIDEO_ID = "_PnbRwLr7WA";
+  var BASE_PARAMS = "controls=0&disablekb=1&fs=0&iv_load_policy=3&modestbranding=1&playsinline=1&rel=0";
+
+  function embedUrl(opts) {
+    opts = opts || {};
+    var autoplay = opts.autoplay !== false ? 1 : 0;
+    var mute = opts.mute ? 1 : 0;
+    return "https://www.youtube-nocookie.com/embed/" + VIDEO_ID +
+      "?autoplay=" + autoplay + "&mute=" + mute + "&" + BASE_PARAMS;
+  }
+
+  var iframe = document.getElementById('yt-iframe');
+  var isPlaying = true;
+  var isMuted = false;
+  var overlay = document.getElementById('overlay');
+  var boot = document.getElementById('boot');
+  var bootText = document.getElementById('boot-text');
+  var playPauseIcon = document.getElementById('play-pause-icon');
+  var muteIcon = document.getElementById('mute-icon');
+  var statusText = document.getElementById('status-text');
+  var liveDot = document.getElementById('live-dot');
+
+  var ICON_PLAY = '<path d="M8 5v14l11-7z"/>';
+  var ICON_PAUSE = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+  var ICON_MUTE = '<path d="M3 9v6h4l5 5V4L7 9H3z"/>';
+  var ICON_UNMUTE = '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4.03v8.06A4.5 4.5 0 0016.5 12z"/>';
+
+  // The iframe firing 'load' just means the YouTube embed page itself
+  // loaded — not that the video is actually playing — but it's the
+  // clearest signal we get without the JS API, and lets us dismiss
+  // the boot screen instead of spinning forever.
+  var loaded = false;
+  iframe.addEventListener('load', function() {
+    loaded = true;
+    statusText.textContent = 'LIVE';
+    liveDot.classList.add('live');
+    setTimeout(function() { boot.classList.add('hidden'); }, 500);
+    flashOverlay();
+  });
+
+  // If nothing loads within 8s, surface that clearly instead of an
+  // infinite "Connecting..." spinner.
+  setTimeout(function() {
+    if (!loaded) {
+      bootText.textContent = "Couldn't load stream — embedding may be blocked. Tap reload to retry.";
+    }
+  }, 8000);
+
+  function reloadStream() {
+    loaded = false;
+    boot.classList.remove('hidden');
+    bootText.textContent = 'Reconnecting…';
+    isPlaying = true;
+    playPauseIcon.innerHTML = ICON_PAUSE;
+    iframe.src = embedUrl({ autoplay: true, mute: isMuted });
+  }
+
+  // ---- Overlay show/hide ----
+  var overlayTimer = null;
+  function flashOverlay() {
+    overlay.classList.add('visible');
+    clearTimeout(overlayTimer);
+    overlayTimer = setTimeout(function() {
+      overlay.classList.remove('visible');
+    }, 3500);
+  }
+
+  function toggleOverlay() {
+    if (overlay.classList.contains('visible')) {
+      overlay.classList.remove('visible');
+      clearTimeout(overlayTimer);
+    } else {
+      flashOverlay();
+    }
+  }
+
+  document.getElementById('stage').addEventListener('click', function(ev) {
+    if (ev.target.closest('.ctrl-btn')) return;
+    toggleOverlay();
+  });
+
+  // ---- Controls ----
+  // Without the JS API we can't pause-in-place, so "pause" reloads the
+  // iframe with autoplay off (shows a static frame) and "play" reloads
+  // with autoplay back on. Not perfectly seamless, but reliable.
+  document.getElementById('play-pause').addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    isPlaying = !isPlaying;
+    playPauseIcon.innerHTML = isPlaying ? ICON_PAUSE : ICON_PLAY;
+    iframe.src = embedUrl({ autoplay: isPlaying, mute: isMuted });
+    flashOverlay();
+  });
+
+  document.getElementById('mute-btn').addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    isMuted = !isMuted;
+    muteIcon.innerHTML = isMuted ? ICON_MUTE : ICON_UNMUTE;
+    iframe.src = embedUrl({ autoplay: isPlaying, mute: isMuted });
+    flashOverlay();
+  });
+
+  document.getElementById('reload-btn').addEventListener('click', function(ev) {
+    ev.stopPropagation();
+    reloadStream();
+  });
+
+  // ---- Keyboard fallback (for testing in a normal browser) ----
+  document.addEventListener('keydown', function(ev) {
+    if (ev.code === 'Space' || ev.code === 'Enter') {
+      ev.preventDefault();
+      document.getElementById('play-pause').click();
+    } else if (ev.code === 'ArrowRight' || ev.code === 'ArrowLeft') {
+      toggleOverlay();
+    } else if (ev.code === 'KeyM') {
+      document.getElementById('mute-btn').click();
+    } else if (ev.code === 'KeyR') {
+      reloadStream();
+    }
+  });
+</script>
+</body>
+</html>
